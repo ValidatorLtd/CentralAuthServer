@@ -1,0 +1,63 @@
+## Ignore Visual Studio files
+.vs/
+*.user
+*.suo
+
+## Ignore build results
+bin/
+obj/
+[Bb]uild/
+[Bb]uild[Ll]og.*
+
+## Ignore Rider IDE
+.idea/
+
+## Ignore JetBrains Rider specific files
+*.sln.iml
+
+## Ignore database files
+*.db
+*.mdf
+*.ldf
+
+## Ignore EF Core Migrations snapshots
+Migrations/
+
+## Ignore secrets and sensitive configs
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
+## Ignore test results
+TestResults/
+
+## Ignore logs
+*.log
+
+## Ignore publish output
+publish/
+out/
+
+## Ignore node/npm if frontend is integrated later
+node_modules/
+dist/
+
+## Ignore ReSharper
+_ReSharper*/
+*.DotSettings.user
+
+## Ignore Mac files
+.DS_Store
+
+## Ignore Windows thumbs
+Thumbs.db
+ehthumbs.db
+
+## Ignore temporary files
+*.tmp
+*.bak
+*.old
+*.swp
+
+## Ignore your own folders (if any)
+.env
