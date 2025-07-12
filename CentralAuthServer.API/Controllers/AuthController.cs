@@ -1,6 +1,8 @@
 ﻿using CentralAuthServer.API.DTOs;
 using CentralAuthServer.Core.Entities;
+using CentralAuthServer.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -13,27 +15,51 @@ public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _config;
+    private readonly CentralAuthServer.Core.Services.IEmailSender _emailSender;
 
-    public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config)
+    public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config, 
+        CentralAuthServer.Core.Services.IEmailSender emailSender)
     {
         _userManager = userManager;
         _config = config;
+        _emailSender = emailSender;
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+    public async Task<IActionResult> Register([FromBody] RegisterDto model)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var user = new ApplicationUser { UserName = dto.Email, Email = dto.Email };
-        var result = await _userManager.CreateAsync(user, dto.Password);
+        var user = new ApplicationUser
+        {
+            UserName = model.Email,
+            Email = model.Email,
+        };
+
+        var result = await _userManager.CreateAsync(user, model.Password);
 
         if (!result.Succeeded)
             return BadRequest(result.Errors);
 
-        return Ok("User created");
+        // Generate email confirmation token
+        var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        var confirmationLink = Url.Action(
+            nameof(ConfirmEmail),
+            "Auth",
+            new { userId = user.Id, token },
+            Request.Scheme);
+
+        // TODO: Send the confirmation link via email
+        await _emailSender.SendEmailAsync(user.Email, "Confirm your email",
+            $"Please confirm your account by <a href='{confirmationLink}'>clicking here</a>");
+
+        return Ok(new
+        {
+            message = "Registration successful. Please check your email to confirm your account."
+        });
     }
+
 
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
@@ -66,5 +92,19 @@ public class AuthController : ControllerBase
             signingCredentials: creds);
 
         return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail(string userId, string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return BadRequest("Invalid user.");
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (result.Succeeded)
+            return Ok("Email confirmed successfully!");
+
+        return BadRequest("Email confirmation failed.");
     }
 }

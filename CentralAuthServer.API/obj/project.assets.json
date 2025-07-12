@@ -1751,10 +1751,21 @@
           }
         }
       },
+      "CentralAuthServer.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "compile": {
+          "bin/placeholder/CentralAuthServer.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/CentralAuthServer.Core.dll": {}
+        }
+      },
       "CentralAuthServer.Infrastructure/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v9.0",
         "dependencies": {
+          "CentralAuthServer.Core": "1.0.0",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "9.0.7",
           "Microsoft.EntityFrameworkCore.SqlServer": "9.0.7"
         },
@@ -5073,6 +5084,11 @@
         "useSharedDesignerContext.txt"
       ]
     },
+    "CentralAuthServer.Core/1.0.0": {
+      "type": "project",
+      "path": "../CentralAuthServer.Core/CentralAuthServer.Core.csproj",
+      "msbuildProject": "../CentralAuthServer.Core/CentralAuthServer.Core.csproj"
+    },
     "CentralAuthServer.Infrastructure/1.0.0": {
       "type": "project",
       "path": "../CentralAuthServer.Infrastructure/CentralAuthServer.Infrastructure.csproj",
@@ -5081,6 +5097,7 @@
   },
   "projectFileDependencyGroups": {
     "net9.0": [
+      "CentralAuthServer.Core >= 1.0.0",
       "CentralAuthServer.Infrastructure >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.JwtBearer >= 9.0.7",
       "Microsoft.AspNetCore.Identity.EntityFrameworkCore >= 9.0.7",
@@ -5123,6 +5140,9 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
+            "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Core\\CentralAuthServer.Core.csproj": {
+              "projectPath": "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Core\\CentralAuthServer.Core.csproj"
+            },
             "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Infrastructure\\CentralAuthServer.Infrastructure.csproj": {
               "projectPath": "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Infrastructure\\CentralAuthServer.Infrastructure.csproj"
             }

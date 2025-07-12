@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\CentralAuthServer.Core\CentralAuthServer.Core.csproj" />
     <ProjectReference Include="..\CentralAuthServer.Infrastructure\CentralAuthServer.Infrastructure.csproj" />
   </ItemGroup>
 
