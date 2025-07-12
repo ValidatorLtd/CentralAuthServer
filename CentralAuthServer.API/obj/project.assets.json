@@ -1673,6 +1673,20 @@
             "rid": "win"
           }
         }
+      },
+      "CentralAuthServer.Infrastructure/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "9.0.7",
+          "Microsoft.EntityFrameworkCore.SqlServer": "9.0.7"
+        },
+        "compile": {
+          "bin/placeholder/CentralAuthServer.Infrastructure.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/CentralAuthServer.Infrastructure.dll": {}
+        }
       }
     }
   },
@@ -4656,10 +4670,16 @@
         "system.windows.extensions.nuspec",
         "useSharedDesignerContext.txt"
       ]
+    },
+    "CentralAuthServer.Infrastructure/1.0.0": {
+      "type": "project",
+      "path": "../CentralAuthServer.Infrastructure/CentralAuthServer.Infrastructure.csproj",
+      "msbuildProject": "../CentralAuthServer.Infrastructure/CentralAuthServer.Infrastructure.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net9.0": [
+      "CentralAuthServer.Infrastructure >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.JwtBearer >= 9.0.7",
       "Microsoft.AspNetCore.Identity.EntityFrameworkCore >= 9.0.7",
       "Microsoft.AspNetCore.OpenApi >= 9.0.2",
@@ -4699,7 +4719,11 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Infrastructure\\CentralAuthServer.Infrastructure.csproj": {
+              "projectPath": "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Infrastructure\\CentralAuthServer.Infrastructure.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
