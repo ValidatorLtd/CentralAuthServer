@@ -1,5 +1,5 @@
 ﻿using CentralAuthServer.Core.Services;
-using CentralAuthServer.Infrastructure.Entities;
+using CentralAuthServer.Core.Entities;
 using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;

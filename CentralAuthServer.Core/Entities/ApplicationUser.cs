@@ -8,6 +8,8 @@ public class ApplicationUser : IdentityUser
     public DateTime? TwoFactorExpires { get; set; }
     public MfaMethod MfaMethod { get; set; } = MfaMethod.None;
     public string? TOTPSecret { get; set; }
+    public Guid TenantId { get; set; }
+    public Tenant Tenant { get; set; } = null!;
 }
 
 public enum MfaMethod

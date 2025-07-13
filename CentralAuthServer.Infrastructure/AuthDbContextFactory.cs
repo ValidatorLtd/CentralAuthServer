@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using CentralAuthServer.Core.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 using System.IO;
@@ -19,7 +20,15 @@ namespace CentralAuthServer.Infrastructure
 
             optionsBuilder.UseSqlServer(connectionString);
 
-            return new AuthDbContext(optionsBuilder.Options);
+            var tenantProvider = new DesignTimeTenantProvider();
+
+
+            return new AuthDbContext(optionsBuilder.Options,tenantProvider);
+        }
+
+        public class DesignTimeTenantProvider : ITenantProvider
+        {
+            public Guid? TenantId => null;
         }
     }
 }

@@ -3,7 +3,6 @@ using CentralAuthServer.Application.Interfaces;
 using CentralAuthServer.Core.Entities;
 using CentralAuthServer.Core.Services;
 using CentralAuthServer.Infrastructure;
-using CentralAuthServer.Infrastructure.Entities;
 using CentralAuthServer.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -47,10 +46,14 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        var tenant = await _dbContext.Tenants.FirstOrDefaultAsync(t => t.Code == model.TenantCode);
+        if (tenant == null)
+            return BadRequest("Invalid tenant.");
+
         var user = new ApplicationUser
         {
-            UserName = model.Email,
             Email = model.Email,
+            TenantId = tenant.Id
         };
 
         var result = await _userManager.CreateAsync(user, model.Password);

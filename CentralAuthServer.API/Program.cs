@@ -108,7 +108,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<IJwtService, JwtService>();
-
+builder.Services.AddScoped<ITenantProvider, TenantProvider>();
 
 var app = builder.Build();
 
@@ -149,6 +149,8 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
+    await TenantSeeder.SeedTenantsAsync(scope.ServiceProvider);
+
 }
 
 app.Run();
