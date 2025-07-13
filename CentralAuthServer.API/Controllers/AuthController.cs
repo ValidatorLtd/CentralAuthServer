@@ -1,5 +1,6 @@
 ﻿using CentralAuthServer.API.DTOs;
 using CentralAuthServer.Core.Entities;
+using CentralAuthServer.Core.Services;
 using CentralAuthServer.Infrastructure;
 using CentralAuthServer.Infrastructure.Entities;
 using CentralAuthServer.Infrastructure.Services;
@@ -23,14 +24,17 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly CentralAuthServer.Core.Services.IEmailSender _emailSender;
     private readonly AuthDbContext _dbContext;
+    private readonly IAuditLogger _auditLogger;
+
 
     public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config,
-        CentralAuthServer.Core.Services.IEmailSender emailSender, AuthDbContext dbContext)
+        CentralAuthServer.Core.Services.IEmailSender emailSender, AuthDbContext dbContext, IAuditLogger auditLogger)
     {
         _userManager = userManager;
         _config = config;
         _emailSender = emailSender;
         _dbContext = dbContext;
+        _auditLogger = auditLogger;
     }
 
     [HttpPost("register")]
@@ -71,13 +75,19 @@ public class AuthController : ControllerBase
         });
     }
 
-
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         var user = await _userManager.FindByEmailAsync(dto.Email);
+
         if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
+        {
+            // ❌ Log failed login if email exists
+            if (user != null)
+                await _auditLogger.LogAsync(user.Id, "FailedLogin", "Local", HttpContext);
+
             return Unauthorized("Invalid credentials.");
+        }
 
         if (!await _userManager.IsEmailConfirmedAsync(user))
             return Unauthorized("Email not confirmed.");
@@ -85,7 +95,7 @@ public class AuthController : ControllerBase
         switch (user.MfaMethod)
         {
             case MfaMethod.Email:
-                // Generate and send 2FA email code
+                // ✅ Generate and send 2FA email code
                 var emailCode = new Random().Next(100000, 999999).ToString();
                 user.TwoFactorCode = emailCode;
                 user.TwoFactorExpires = DateTime.UtcNow.AddMinutes(5);
@@ -110,7 +120,7 @@ public class AuthController : ControllerBase
 
             case MfaMethod.None:
             default:
-                // No MFA, proceed with login
+                // ✅ No MFA → generate JWT and log login
                 var jwtResult = await GenerateJwtAsync(user);
                 var refreshToken = new RefreshToken
                 {
@@ -124,6 +134,7 @@ public class AuthController : ControllerBase
                 };
 
                 await _dbContext.RefreshTokens.AddAsync(refreshToken);
+                await _auditLogger.LogAsync(user.Id, "Login", "Local", HttpContext);
                 await _dbContext.SaveChangesAsync();
 
                 return Ok(new
@@ -134,17 +145,32 @@ public class AuthController : ControllerBase
         }
     }
 
-
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] RevokeTokenRequest dto)
     {
         var token = await _dbContext.RefreshTokens
+            .Include(t => t.User) // include user to get user ID
             .FirstOrDefaultAsync(t => t.Token == dto.RefreshToken);
 
-        if (token == null) return NotFound("Refresh token not found.");
-        if (token.Revoked) return BadRequest("Token already revoked.");
+        if (token == null)
+            return NotFound("Refresh token not found.");
+
+        if (token.Revoked)
+            return BadRequest("Token already revoked.");
 
         token.Revoked = true;
+
+        // ✅ Log logout event
+        if (token.User != null)
+        {
+            await _auditLogger.LogAsync(
+                token.User.Id,
+                "Logout",
+                "Local",
+                HttpContext
+            );
+        }
+
         await _dbContext.SaveChangesAsync();
 
         return Ok("Logged out successfully.");
@@ -155,9 +181,14 @@ public class AuthController : ControllerBase
     {
         var user = await _userManager.FindByEmailAsync(dto.Email);
         if (user == null || user.TwoFactorCode != dto.Code || user.TwoFactorExpires < DateTime.UtcNow)
-            return Unauthorized("Invalid or expired 2FA code.");
+        {
+            if (user != null)
+                await _auditLogger.LogAsync(user.Id, "Failed2FA", "Email", HttpContext);
 
-        // Clear the code
+            return Unauthorized("Invalid or expired 2FA code.");
+        }
+
+        // ✅ Clear the 2FA code
         user.TwoFactorCode = null;
         user.TwoFactorExpires = null;
 
@@ -174,6 +205,54 @@ public class AuthController : ControllerBase
         };
 
         await _dbContext.RefreshTokens.AddAsync(refreshToken);
+
+        // ✅ Log successful login after 2FA
+        await _auditLogger.LogAsync(user.Id, "Login", "Email-2FA", HttpContext);
+
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            accessToken = jwt.Token,
+            refreshToken = refreshToken.Token
+        });
+    }
+
+    [Authorize]
+    [HttpPost("mfa/verify-totp")]
+    public async Task<IActionResult> VerifyTOTP([FromBody] VerifyTOTPDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+        if (user == null || string.IsNullOrEmpty(user.TOTPSecret))
+            return BadRequest("TOTP not configured.");
+
+        var totp = new Totp(Base32Encoding.ToBytes(user.TOTPSecret));
+        var isValid = totp.VerifyTotp(dto.Code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
+
+        if (!isValid)
+        {
+            await _auditLogger.LogAsync(user.Id, "Failed2FA", "TOTP", HttpContext);
+            return Unauthorized("Invalid TOTP code.");
+        }
+
+        var jwt = await GenerateJwtAsync(user);
+        var refreshToken = new RefreshToken
+        {
+            Token = Guid.NewGuid().ToString("N"),
+            JwtId = jwt.JwtId,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            UserId = user.Id,
+            IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            DeviceInfo = Request.Headers["User-Agent"].ToString()
+        };
+
+        await _dbContext.RefreshTokens.AddAsync(refreshToken);
+
+        // ✅ Log successful TOTP login
+        await _auditLogger.LogAsync(user.Id, "Login", "TOTP", HttpContext);
+
         await _dbContext.SaveChangesAsync();
 
         return Ok(new
@@ -206,23 +285,6 @@ public class AuthController : ControllerBase
         return File(qrCodeBytes, "image/png");
     }
 
-    [Authorize]
-    [HttpPost("mfa/verify-totp")]
-    public IActionResult VerifyTOTP([FromBody] VerifyTOTPDto dto)
-    {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
-        if (user == null || string.IsNullOrEmpty(user.TOTPSecret)) return BadRequest("Not configured.");
-
-        var totp = new Totp(Base32Encoding.ToBytes(user.TOTPSecret));
-        var isValid = totp.VerifyTotp(dto.Code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
-
-        if (!isValid)
-            return Unauthorized("Invalid code.");
-
-        // Optionally mark TOTP as verified or continue login flow
-        return Ok("MFA code verified.");
-    }
 
     [Authorize]
     [HttpPost("mfa/set-method")]
@@ -311,6 +373,27 @@ public class AuthController : ControllerBase
 
         return Ok("Password has been reset successfully.");
     }
+
+    [Authorize]
+    [HttpGet("audit/logins")]
+    public async Task<IActionResult> GetLoginHistory()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var logs = await _dbContext.AuditLogs
+            .Where(x => x.UserId == userId && x.EventType == "Login")
+            .OrderByDescending(x => x.Timestamp)
+            .Select(x => new
+            {
+                x.Timestamp,
+                x.IPAddress,
+                x.DeviceInfo,
+                x.LoginProvider
+            })
+            .ToListAsync();
+
+        return Ok(logs);
+    }
+
 
     private async Task<JwtResult> GenerateJwtAsync(ApplicationUser user)
     {

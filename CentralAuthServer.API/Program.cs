@@ -85,7 +85,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     {
         msOptions.ClientId = builder.Configuration["Authentication:Microsoft:ClientId"]!;
         msOptions.ClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"]!;
-        msOptions.Tenant = builder.Configuration["Authentication:Microsoft:Tenant"]!;
+        //TODO
+        //msOptions.Tenant = builder.Configuration["Authentication:Microsoft:Tenant"]!;
     });
 
 builder.Services.AddAuthorization();
@@ -103,6 +104,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddScoped<IEmailSender, EmailSender>();
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 
 var app = builder.Build();
 
