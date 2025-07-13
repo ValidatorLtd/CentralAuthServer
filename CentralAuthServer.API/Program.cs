@@ -1,3 +1,5 @@
+using CentralAuthServer.Application.Interfaces;
+using CentralAuthServer.Application.Services;
 using CentralAuthServer.Core.Entities;
 using CentralAuthServer.Core.Services;
 using CentralAuthServer.Infrastructure;
@@ -105,6 +107,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<IEmailSender, EmailSender>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+builder.Services.AddScoped<IJwtService, JwtService>();
+
 
 var app = builder.Build();
 

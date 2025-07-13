@@ -1,4 +1,5 @@
 ﻿using CentralAuthServer.API.DTOs;
+using CentralAuthServer.Application.Interfaces;
 using CentralAuthServer.Core.Entities;
 using CentralAuthServer.Core.Services;
 using CentralAuthServer.Infrastructure;
@@ -25,16 +26,19 @@ public class AuthController : ControllerBase
     private readonly CentralAuthServer.Core.Services.IEmailSender _emailSender;
     private readonly AuthDbContext _dbContext;
     private readonly IAuditLogger _auditLogger;
+    private readonly IJwtService _jwtService;
 
 
     public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config,
-        CentralAuthServer.Core.Services.IEmailSender emailSender, AuthDbContext dbContext, IAuditLogger auditLogger)
+        CentralAuthServer.Core.Services.IEmailSender emailSender, AuthDbContext dbContext, IAuditLogger auditLogger,
+        IJwtService jwtService)
     {
         _userManager = userManager;
         _config = config;
         _emailSender = emailSender;
         _dbContext = dbContext;
         _auditLogger = auditLogger;
+        _jwtService = jwtService;
     }
 
     [HttpPost("register")]
@@ -121,7 +125,7 @@ public class AuthController : ControllerBase
             case MfaMethod.None:
             default:
                 // ✅ No MFA → generate JWT and log login
-                var jwtResult = await GenerateJwtAsync(user);
+                var jwtResult = await _jwtService.GenerateJwtAsync(user);
                 var refreshToken = new RefreshToken
                 {
                     Token = Guid.NewGuid().ToString("N"),
@@ -192,7 +196,7 @@ public class AuthController : ControllerBase
         user.TwoFactorCode = null;
         user.TwoFactorExpires = null;
 
-        var jwt = await GenerateJwtAsync(user);
+        var jwt = await _jwtService.GenerateJwtAsync(user);
         var refreshToken = new RefreshToken
         {
             Token = Guid.NewGuid().ToString("N"),
@@ -236,7 +240,7 @@ public class AuthController : ControllerBase
             return Unauthorized("Invalid TOTP code.");
         }
 
-        var jwt = await GenerateJwtAsync(user);
+        var jwt = await _jwtService.GenerateJwtAsync(user);
         var refreshToken = new RefreshToken
         {
             Token = Guid.NewGuid().ToString("N"),
@@ -392,41 +396,6 @@ public class AuthController : ControllerBase
             .ToListAsync();
 
         return Ok(logs);
-    }
-
-
-    private async Task<JwtResult> GenerateJwtAsync(ApplicationUser user)
-    {
-        var userRoles = await _userManager.GetRolesAsync(user);
-        var roleClaims = userRoles.Select(r => new Claim(ClaimTypes.Role, r));
-
-        var jwtId = Guid.NewGuid().ToString();
-        var claims = new List<Claim>
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(ClaimTypes.Name, user.UserName!),
-            new Claim(JwtRegisteredClaimNames.Jti, jwtId)
-        };
-        claims.AddRange(roleClaims);
-
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(30),
-            signingCredentials: creds
-        );
-
-        return new JwtResult
-        {
-            Token = new JwtSecurityTokenHandler().WriteToken(token),
-            JwtId = jwtId
-        };
-    }
-
-
+    }   
 }
+

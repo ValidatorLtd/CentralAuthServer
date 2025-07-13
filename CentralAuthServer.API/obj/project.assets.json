@@ -1968,6 +1968,19 @@
           }
         }
       },
+      "CentralAuthServer.Application/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "dependencies": {
+          "CentralAuthServer.Infrastructure": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/CentralAuthServer.Application.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/CentralAuthServer.Application.dll": {}
+        }
+      },
       "CentralAuthServer.Core/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v9.0",
@@ -5599,6 +5612,11 @@
         "useSharedDesignerContext.txt"
       ]
     },
+    "CentralAuthServer.Application/1.0.0": {
+      "type": "project",
+      "path": "../CentralAuthServer.Application/CentralAuthServer.Application.csproj",
+      "msbuildProject": "../CentralAuthServer.Application/CentralAuthServer.Application.csproj"
+    },
     "CentralAuthServer.Core/1.0.0": {
       "type": "project",
       "path": "../CentralAuthServer.Core/CentralAuthServer.Core.csproj",
@@ -5612,6 +5630,7 @@
   },
   "projectFileDependencyGroups": {
     "net9.0": [
+      "CentralAuthServer.Application >= 1.0.0",
       "CentralAuthServer.Core >= 1.0.0",
       "CentralAuthServer.Infrastructure >= 1.0.0",
       "Microsoft.AspNetCore.Authentication.Facebook >= 9.0.7",
@@ -5659,6 +5678,9 @@
         "net9.0": {
           "targetAlias": "net9.0",
           "projectReferences": {
+            "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Application\\CentralAuthServer.Application.csproj": {
+              "projectPath": "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Application\\CentralAuthServer.Application.csproj"
+            },
             "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Core\\CentralAuthServer.Core.csproj": {
               "projectPath": "D:\\ReposValidator\\CentralAuthServer\\CentralAuthServer.Core\\CentralAuthServer.Core.csproj"
             },

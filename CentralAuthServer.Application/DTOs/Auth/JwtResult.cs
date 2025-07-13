@@ -1,4 +1,4 @@
-﻿namespace CentralAuthServer.API.DTOs
+﻿namespace CentralAuthServer.Application.DTOs.Auth
 {
     public class JwtResult
     {
