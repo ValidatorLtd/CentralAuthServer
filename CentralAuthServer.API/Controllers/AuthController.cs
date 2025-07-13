@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OtpNet;
+using QRCoder;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -80,21 +82,58 @@ public class AuthController : ControllerBase
         if (!await _userManager.IsEmailConfirmedAsync(user))
             return Unauthorized("Email not confirmed.");
 
-        // ✅ Generate and send 2FA code
-        var code = new Random().Next(100000, 999999).ToString();
-        user.TwoFactorCode = code;
-        user.TwoFactorExpires = DateTime.UtcNow.AddMinutes(5);
-        await _dbContext.SaveChangesAsync();
-
-        await _emailSender.SendEmailAsync(user.Email!, "Your 2FA Code", $"Your code is: {code}");
-
-        // ✅ Don't return JWT yet — wait for user to verify
-        return Ok(new
+        switch (user.MfaMethod)
         {
-            requires2FA = true,
-            message = "A 2FA code has been sent to your email."
-        });
+            case MfaMethod.Email:
+                // Generate and send 2FA email code
+                var emailCode = new Random().Next(100000, 999999).ToString();
+                user.TwoFactorCode = emailCode;
+                user.TwoFactorExpires = DateTime.UtcNow.AddMinutes(5);
+                await _dbContext.SaveChangesAsync();
+
+                await _emailSender.SendEmailAsync(user.Email!, "Your 2FA Code", $"Your code is: {emailCode}");
+
+                return Ok(new
+                {
+                    requires2FA = true,
+                    method = "Email",
+                    message = "A 2FA code has been sent to your email."
+                });
+
+            case MfaMethod.TOTP:
+                return Ok(new
+                {
+                    requires2FA = true,
+                    method = "TOTP",
+                    message = "Enter the code from your Authenticator app."
+                });
+
+            case MfaMethod.None:
+            default:
+                // No MFA, proceed with login
+                var jwtResult = await GenerateJwtAsync(user);
+                var refreshToken = new RefreshToken
+                {
+                    Token = Guid.NewGuid().ToString("N"),
+                    JwtId = jwtResult.JwtId,
+                    CreatedAt = DateTime.UtcNow,
+                    ExpiresAt = DateTime.UtcNow.AddDays(7),
+                    UserId = user.Id,
+                    IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    DeviceInfo = Request.Headers["User-Agent"].ToString()
+                };
+
+                await _dbContext.RefreshTokens.AddAsync(refreshToken);
+                await _dbContext.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    accessToken = jwtResult.Token,
+                    refreshToken = refreshToken.Token
+                });
+        }
     }
+
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] RevokeTokenRequest dto)
@@ -144,6 +183,60 @@ public class AuthController : ControllerBase
         });
     }
 
+    [Authorize]
+    [HttpGet("mfa/setup")]
+    public IActionResult SetupTOTP()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+        if (user == null) return Unauthorized();
+
+        var secret = Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
+        user.TOTPSecret = secret;
+        _dbContext.SaveChanges();
+
+        var issuer = "YourAppName";
+        var barcodeUrl = $"otpauth://totp/{issuer}:{user.Email}?secret={secret}&issuer={issuer}";
+
+        using var qrGenerator = new QRCodeGenerator();
+        using var qrCodeData = qrGenerator.CreateQrCode(barcodeUrl, QRCodeGenerator.ECCLevel.Q);
+        using var qrCode = new PngByteQRCode(qrCodeData);
+        var qrCodeBytes = qrCode.GetGraphic(20);
+
+        return File(qrCodeBytes, "image/png");
+    }
+
+    [Authorize]
+    [HttpPost("mfa/verify-totp")]
+    public IActionResult VerifyTOTP([FromBody] VerifyTOTPDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = _dbContext.Users.FirstOrDefault(u => u.Id == userId);
+        if (user == null || string.IsNullOrEmpty(user.TOTPSecret)) return BadRequest("Not configured.");
+
+        var totp = new Totp(Base32Encoding.ToBytes(user.TOTPSecret));
+        var isValid = totp.VerifyTotp(dto.Code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
+
+        if (!isValid)
+            return Unauthorized("Invalid code.");
+
+        // Optionally mark TOTP as verified or continue login flow
+        return Ok("MFA code verified.");
+    }
+
+    [Authorize]
+    [HttpPost("mfa/set-method")]
+    public async Task<IActionResult> SetMfaMethod([FromBody] SetMfaMethodDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await _dbContext.Users.FindAsync(userId);
+        if (user == null) return Unauthorized();
+
+        user.MfaMethod = dto.Method;
+        await _dbContext.SaveChangesAsync();
+
+        return Ok($"MFA method set to {dto.Method}");
+    }
 
     [Authorize]
     [HttpPost("revoke-all")]
