@@ -117,7 +117,6 @@ namespace CentralAuthServer.API.Controllers
             var newUser = new ApplicationUser
             {
                 Email = email,
-                UserName = email,
                 EmailConfirmed = true
             };
 

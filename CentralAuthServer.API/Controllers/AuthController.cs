@@ -53,6 +53,7 @@ public class AuthController : ControllerBase
         var user = new ApplicationUser
         {
             Email = model.Email,
+            UserName = model.Email, // Use Email as UserName
             TenantId = tenant.Id
         };
 
@@ -72,7 +73,6 @@ public class AuthController : ControllerBase
             new { userId = user.Id, token },
             Request.Scheme);
 
-        // TODO: Send the confirmation link via email
         await _emailSender.SendEmailAsync(user.Email, "Confirm your email",
             $"Please confirm your account by <a href='{confirmationLink}'>clicking here</a>");
 

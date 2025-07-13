@@ -26,7 +26,11 @@ public class AuthDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Tenant>().HasIndex(t => t.Code).IsUnique();
 
         builder.Entity<ApplicationUser>()
-            .HasQueryFilter(u => u.TenantId == _tenantProvider.TenantId);
+            .HasIndex(u => u.Email)
+            .IsUnique();
+
+        //builder.Entity<ApplicationUser>()
+            //.HasQueryFilter(u => u.TenantId == _tenantProvider.TenantId);
 
         builder.Entity<Tenant>()
             .HasMany(t => t.Users)
