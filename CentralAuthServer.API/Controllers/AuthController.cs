@@ -80,25 +80,19 @@ public class AuthController : ControllerBase
         if (!await _userManager.IsEmailConfirmedAsync(user))
             return Unauthorized("Email not confirmed.");
 
-        var jwtResult = await GenerateJwtAsync(user); // returns token + JwtId
-        var refreshToken = new RefreshToken
-        {
-            Token = Guid.NewGuid().ToString("N"),
-            JwtId = jwtResult.JwtId,
-            CreatedAt = DateTime.UtcNow,
-            ExpiresAt = DateTime.UtcNow.AddDays(7),
-            UserId = user.Id,
-            IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            DeviceInfo = Request.Headers["User-Agent"].ToString()
-        };
-
-        await _dbContext.RefreshTokens.AddAsync(refreshToken);
+        // ✅ Generate and send 2FA code
+        var code = new Random().Next(100000, 999999).ToString();
+        user.TwoFactorCode = code;
+        user.TwoFactorExpires = DateTime.UtcNow.AddMinutes(5);
         await _dbContext.SaveChangesAsync();
 
+        await _emailSender.SendEmailAsync(user.Email!, "Your 2FA Code", $"Your code is: {code}");
+
+        // ✅ Don't return JWT yet — wait for user to verify
         return Ok(new
         {
-            accessToken = jwtResult.Token,
-            refreshToken = refreshToken.Token
+            requires2FA = true,
+            message = "A 2FA code has been sent to your email."
         });
     }
 
@@ -116,6 +110,40 @@ public class AuthController : ControllerBase
 
         return Ok("Logged out successfully.");
     }
+
+    [HttpPost("verify-2fa")]
+    public async Task<IActionResult> Verify2FA([FromBody] Verify2FADto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null || user.TwoFactorCode != dto.Code || user.TwoFactorExpires < DateTime.UtcNow)
+            return Unauthorized("Invalid or expired 2FA code.");
+
+        // Clear the code
+        user.TwoFactorCode = null;
+        user.TwoFactorExpires = null;
+
+        var jwt = await GenerateJwtAsync(user);
+        var refreshToken = new RefreshToken
+        {
+            Token = Guid.NewGuid().ToString("N"),
+            JwtId = jwt.JwtId,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            UserId = user.Id,
+            IPAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            DeviceInfo = Request.Headers["User-Agent"].ToString()
+        };
+
+        await _dbContext.RefreshTokens.AddAsync(refreshToken);
+        await _dbContext.SaveChangesAsync();
+
+        return Ok(new
+        {
+            accessToken = jwt.Token,
+            refreshToken = refreshToken.Token
+        });
+    }
+
 
     [Authorize]
     [HttpPost("revoke-all")]
