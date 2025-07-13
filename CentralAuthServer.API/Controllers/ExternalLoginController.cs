@@ -90,29 +90,53 @@ namespace CentralAuthServer.API.Controllers
             if (info == null || info.LoginProvider != provider)
                 return Redirect("/login?error=external");
 
-            var result = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, false);
+            // ✅ 1. Try direct sign-in (already linked)
+            var result = await _signInManager.ExternalLoginSignInAsync(
+                info.LoginProvider, info.ProviderKey, isPersistent: false);
+
             if (result.Succeeded)
                 return Redirect("/login-success");
 
+            // ✅ 2. Get email from external provider
             var email = info.Principal.FindFirstValue(ClaimTypes.Email);
-            if (email == null) return Redirect("/login?error=no-email");
+            if (string.IsNullOrEmpty(email))
+                return Redirect("/login?error=no-email");
 
+            // ✅ 3. Find user by email
             var user = await _userManager.FindByEmailAsync(email);
-            if (user == null)
+
+            if (user != null)
             {
-                user = new ApplicationUser
+                // ✅ 4. Link external login to existing user (if not already linked)
+                var existingLogins = await _userManager.GetLoginsAsync(user);
+                if (!existingLogins.Any(l => l.LoginProvider == info.LoginProvider))
                 {
-                    Email = email,
-                    UserName = email,
-                    EmailConfirmed = true
-                };
-                await _userManager.CreateAsync(user);
+                    var linkResult = await _userManager.AddLoginAsync(user, info);
+                    if (!linkResult.Succeeded)
+                        return Redirect("/login?error=link-failed");
+                }
+
+                await _signInManager.SignInAsync(user, isPersistent: false);
+                return Redirect("/login-success");
             }
 
+            // ✅ 5. No user found → create new
+            user = new ApplicationUser
+            {
+                Email = email,
+                UserName = email,
+                EmailConfirmed = true
+            };
+
+            var createResult = await _userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
+                return Redirect("/login?error=create-failed");
+
             await _userManager.AddLoginAsync(user, info);
-            await _signInManager.SignInAsync(user, false);
+            await _signInManager.SignInAsync(user, isPersistent: false);
             return Redirect("/login-success");
         }
+
 
     }
 
