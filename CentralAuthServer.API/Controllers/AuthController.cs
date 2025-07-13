@@ -17,7 +17,7 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly CentralAuthServer.Core.Services.IEmailSender _emailSender;
 
-    public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config, 
+    public AuthController(UserManager<ApplicationUser> userManager, IConfiguration config,
         CentralAuthServer.Core.Services.IEmailSender emailSender)
     {
         _userManager = userManager;
@@ -41,6 +41,9 @@ public class AuthController : ControllerBase
 
         if (!result.Succeeded)
             return BadRequest(result.Errors);
+
+        // Assign default role
+        await _userManager.AddToRoleAsync(user, "User"); // Default role
 
         // Generate email confirmation token
         var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
@@ -68,18 +71,23 @@ public class AuthController : ControllerBase
         if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
             return Unauthorized();
 
-        var token = GenerateJwt(user);
+        var token = await GenerateJwtAsync(user);
         return Ok(new { Token = token });
     }
 
-    private string GenerateJwt(ApplicationUser user)
+    private async Task<string> GenerateJwtAsync(ApplicationUser user)
     {
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(ClaimTypes.Name, user.UserName!)
+            new Claim(ClaimTypes.Name, user.UserName!),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        // ✅ Add role claims
+        var roles = await _userManager.GetRolesAsync(user);
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -93,6 +101,8 @@ public class AuthController : ControllerBase
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+
 
     [HttpGet("confirm-email")]
     public async Task<IActionResult> ConfirmEmail(string userId, string token)
