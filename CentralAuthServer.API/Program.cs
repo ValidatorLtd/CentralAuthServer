@@ -70,6 +70,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
+    })
+    .AddGoogle(googleOptions =>
+    {
+        googleOptions.ClientId = builder.Configuration["Authentication:Google:ClientId"]!;
+        googleOptions.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]!;
+    })
+    .AddFacebook(facebookOptions =>
+    {
+        facebookOptions.AppId = builder.Configuration["Authentication:Facebook:AppId"]!;
+        facebookOptions.AppSecret = builder.Configuration["Authentication:Facebook:AppSecret"]!;
+    })
+    .AddMicrosoftAccount(msOptions =>
+    {
+        msOptions.ClientId = builder.Configuration["Authentication:Microsoft:ClientId"]!;
+        msOptions.ClientSecret = builder.Configuration["Authentication:Microsoft:ClientSecret"]!;
+        msOptions.Tenant = builder.Configuration["Authentication:Microsoft:Tenant"]!;
     });
 
 builder.Services.AddAuthorization();
