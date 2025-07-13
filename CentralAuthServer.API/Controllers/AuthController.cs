@@ -75,6 +75,46 @@ public class AuthController : ControllerBase
         return Ok(new { Token = token });
     }
 
+    [HttpGet("confirm-email")]
+    public async Task<IActionResult> ConfirmEmail(string userId, string token)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+            return BadRequest("Invalid user.");
+
+        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (result.Succeeded)
+            return Ok("Email confirmed successfully!");
+
+        return BadRequest("Email confirmation failed.");
+    }
+
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null) return Ok(); // Don't reveal user existence
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var resetLink = $"{_config["Frontend:BaseUrl"]}/reset-password?email={user.Email}&token={Uri.EscapeDataString(token)}";
+
+        await _emailSender.SendEmailAsync(user.Email, "Reset your password", $"Click to reset: {resetLink}");
+
+        return Ok();
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+    {
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null) return BadRequest("Invalid request.");
+
+        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+        if (!result.Succeeded) return BadRequest(result.Errors);
+
+        return Ok("Password has been reset successfully.");
+    }
+
     private async Task<string> GenerateJwtAsync(ApplicationUser user)
     {
         var claims = new List<Claim>
@@ -85,7 +125,6 @@ public class AuthController : ControllerBase
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        // ✅ Add role claims
         var roles = await _userManager.GetRolesAsync(user);
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
@@ -102,19 +141,4 @@ public class AuthController : ControllerBase
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-
-
-    [HttpGet("confirm-email")]
-    public async Task<IActionResult> ConfirmEmail(string userId, string token)
-    {
-        var user = await _userManager.FindByIdAsync(userId);
-        if (user == null)
-            return BadRequest("Invalid user.");
-
-        var result = await _userManager.ConfirmEmailAsync(user, token);
-        if (result.Succeeded)
-            return Ok("Email confirmed successfully!");
-
-        return BadRequest("Email confirmation failed.");
-    }
 }

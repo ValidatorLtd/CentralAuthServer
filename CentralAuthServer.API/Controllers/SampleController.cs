@@ -5,7 +5,7 @@ namespace CentralAuthServer.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class SampleCrudController : ControllerBase
+    public class SampleController : ControllerBase
     {
         [Authorize(Roles = "Admin")]
         [HttpGet("admin-only")]
